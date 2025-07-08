@@ -1,1 +1,64 @@
-loadstring("\112\114\105\110\116\40\34\80\117\116\32\115\99\114\105\112\116\32\121\111\117\114\32\104\101\114\101\34\41\10")()
+-- Load Rayfield
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local correctKey = "Sub2CrepScripts"
+
+local KeyUI = Rayfield:CreateWindow({
+    Name = "Key System",
+    LoadingTitle = "Enter Key",
+    LoadingSubtitle = "Protected UI",
+    ConfigurationSaving = {
+        Enabled = false
+    }
+})
+
+local KeyTab = KeyUI:CreateTab("Key Access", 4483362458)
+
+-- 📝 Note Section
+KeyTab:CreateParagraph({
+    Title = "Important Notice",
+    Content = "Sharing the key will lead to the key being changed!"
+})
+
+-- 🔗 Copy Link Button
+KeyTab:CreateButton({
+    Name = "Get Key Link",
+    Callback = function()
+        setclipboard("https://work.ink/21e5/7wktyaq2")
+        Rayfield:Notify({
+            Title = "Link Copied!",
+            Content = "Key link has been copied to clipboard.",
+            Duration = 3,
+        })
+    end,
+})
+
+-- 🔑 Key Input
+KeyTab:CreateInput({
+    Name = "Enter Access Key",
+    PlaceholderText = "Type key here...",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(input)
+        if input == correctKey then
+            Rayfield:Notify({
+                Title = "Success!",
+                Content = "Correct key entered.",
+                Duration = 2,
+            })
+
+            task.delay(2, function()
+                loadstring(game:HttpGet("https://raw.githubusercontent.com/egor2078f/lurkhackv4/main/main.lua", true))()
+            end)
+
+            task.delay(3, function()
+                Rayfield:Destroy()
+            end)
+        else
+            Rayfield:Notify({
+                Title = "Wrong Key",
+                Content = "Please try again.",
+                Duration = 3,
+            })
+        end
+    end,
+})

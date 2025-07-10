@@ -1,0 +1,135 @@
+local HttpService = game:GetService("HttpService")
+local player = game.Players.LocalPlayer
+local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+screenGui.Name = "KeyGui"
+
+-- Main Frame
+local frame = Instance.new("Frame", screenGui)
+frame.Size = UDim2.new(0, 320, 0, 270)
+frame.Position = UDim2.new(0.5, -160, 0.5, -135)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+
+-- Title
+local titleLabel = Instance.new("TextLabel", frame)
+titleLabel.Size = UDim2.new(1, 0, 0.13, 0)
+titleLabel.Position = UDim2.new(0, 0, 0, 0)
+titleLabel.Text = "Key System"
+titleLabel.BackgroundTransparency = 1
+titleLabel.TextColor3 = Color3.new(1, 1, 1)
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextScaled = true
+
+-- Token Entry
+local textBox = Instance.new("TextBox", frame)
+textBox.PlaceholderText = "Enter your key here..."
+textBox.Size = UDim2.new(0.9, 0, 0.13, 0)
+textBox.Position = UDim2.new(0.05, 0, 0.16, 0)
+textBox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+textBox.TextColor3 = Color3.new(1, 1, 1)
+textBox.Font = Enum.Font.Gotham
+textBox.TextScaled = true
+Instance.new("UICorner", textBox)
+
+-- Status Label
+local statusLabel = Instance.new("TextLabel", frame)
+statusLabel.Size = UDim2.new(0.9, 0, 0.1, 0)
+statusLabel.Position = UDim2.new(0.05, 0, 0.87, 0)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = ""
+statusLabel.TextColor3 = Color3.new(1, 1, 1)
+statusLabel.Font = Enum.Font.GothamBold
+statusLabel.TextScaled = true
+
+-- Button Factory
+local function createButton(text, yPos, color)
+	local button = Instance.new("TextButton", frame)
+	button.Text = text
+	button.Size = UDim2.new(0.9, 0, 0.12, 0)
+	button.Position = UDim2.new(0.05, 0, yPos, 0)
+	button.BackgroundColor3 = color
+	button.TextColor3 = Color3.new(1, 1, 1)
+	button.Font = Enum.Font.GothamBold
+	button.TextScaled = true
+	Instance.new("UICorner", button)
+	return button
+end
+
+-- Buttons
+local checkKeyBtn = createButton("Check Key", 0.31, Color3.fromRGB(52, 152, 219))
+local getKeyBtn = createButton("Get Key", 0.45, Color3.fromRGB(241, 196, 15))
+local subscribeBtn = createButton("Subscribe", 0.59, Color3.fromRGB(231, 76, 60))
+local discordBtn = createButton("Join Discord", 0.73, Color3.fromRGB(155, 89, 182))
+
+-- Helper: Update Status Text
+local function respond(text, color)
+	statusLabel.Text = text
+	statusLabel.TextColor3 = color
+end
+
+-- 🔐 Script to run on valid key
+local function runMainScript()
+	-- 👇 Put your script code here
+	loadstring(game:HttpGet("https://pastebin.com/raw/JXS4Pdt5"))()
+end
+
+-- 🌐 Key Validation using executor's HTTP support
+checkKeyBtn.MouseButton1Click:Connect(function()
+	local token = textBox.Text:match("^%s*(.-)%s*$")
+	if token == "" then
+		respond("❌ Enter a key first!", Color3.fromRGB(231, 76, 60))
+		return
+	end
+
+	respond("🔍 Checking...", Color3.fromRGB(52, 152, 219))
+
+	local http = syn and syn.request or http_request or request
+	if not http then
+		respond("⚠️ Executor doesn't support web requests", Color3.fromRGB(200, 100, 100))
+		warn("No supported HTTP request function found")
+		return
+	end
+
+	local success, result = pcall(function()
+		return http({
+			Url = "https://work.ink/_api/v2/token/isValid/" .. token,
+			Method = "GET"
+		})
+	end)
+
+	if success and result and result.Body then
+		local data = HttpService:JSONDecode(result.Body)
+		if data.valid then
+			respond("✅ Key Valid!", Color3.fromRGB(46, 204, 113))
+			wait(1)
+			screenGui:Destroy()
+			runMainScript()
+		else
+			respond("❌ Invalid Key", Color3.fromRGB(231, 76, 60))
+		end
+	else
+		respond("⚠️ Error validating key", Color3.fromRGB(200, 100, 100))
+		warn("Key system error:", result)
+	end
+end)
+
+-- 🔗 Get Key Button (No Notification)
+getKeyBtn.MouseButton1Click:Connect(function()
+	setclipboard("https://work.ink/21e5/qzq940pa")
+	respond("📋 Key link copied!", Color3.fromRGB(241, 196, 15))
+end)
+
+-- 📺 Subscribe Button
+subscribeBtn.MouseButton1Click:Connect(function()
+	setclipboard("https://www.youtube.com/@CrepScripts") -- Change this
+	respond("📋 YouTube link copied!", Color3.fromRGB(231, 76, 60))
+end)
+
+-- 💬 Discord Button
+discordBtn.MouseButton1Click:Connect(function()
+	setclipboard("https://discord.gg/Nga4tbbtY2") -- Change this
+	respond("📋 Discord link copied!", Color3.fromRGB(155, 89, 182))
+end)

@@ -1,0 +1,305 @@
+--// Services
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local mouse = player:GetMouse()
+local uis = game:GetService("UserInputService")
+local rs = game:GetService("RunService")
+local cam = workspace.CurrentCamera
+
+--// GUI Setup
+local gui = Instance.new("ScreenGui")
+gui.Name = "ModMenu"
+gui.Parent = playerGui
+gui.ResetOnSpawn = false
+
+local mainFrame = Instance.new("Frame", gui)
+mainFrame.Size = UDim2.new(0, 250, 0, 300)
+mainFrame.Position = UDim2.new(0.5, -125, 0.5, -150)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
+
+local layout = Instance.new("UIListLayout", mainFrame)
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Padding = UDim.new(0, 8)
+layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+local padding = Instance.new("UIPadding", mainFrame)
+padding.PaddingTop = UDim.new(0, 15)
+padding.PaddingBottom = UDim.new(0, 15)
+padding.PaddingLeft = UDim.new(0, 20)
+padding.PaddingRight = UDim.new(0, 20)
+
+--// GUI Elements
+local function createLabel(text)
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.new(1, 0, 0, 25)
+	lbl.BackgroundTransparency = 1
+	lbl.Text = text
+	lbl.TextColor3 = Color3.new(1, 1, 1)
+	lbl.Font = Enum.Font.GothamBold
+	lbl.TextSize = 14
+	lbl.TextWrapped = true
+	lbl.TextXAlignment = Enum.TextXAlignment.Center
+	return lbl
+end
+
+local function createButton(name)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(0.8, 0, 0, 40)
+	btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+	btn.TextColor3 = Color3.new(1, 1, 1)
+	btn.TextSize = 16
+	btn.Font = Enum.Font.GothamBold
+	btn.Text = name .. " [OFF]"
+	btn.Name = name
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+	return btn
+end
+
+local topLabel = createLabel("Aimbot + ESP By CrepScripts")
+topLabel.LayoutOrder = 1
+topLabel.Parent = mainFrame
+
+local spacer = Instance.new("Frame")
+spacer.Size = UDim2.new(1, 0, 0, 10)
+spacer.BackgroundTransparency = 1
+spacer.LayoutOrder = 2
+spacer.Parent = mainFrame
+
+local aimbotBtn = createButton("Aimbot")
+aimbotBtn.LayoutOrder = 3
+aimbotBtn.Parent = mainFrame
+
+local espBtn = createButton("ESP")
+espBtn.LayoutOrder = 4
+espBtn.Parent = mainFrame
+
+local jumpBtn = createButton("Inf Jump")
+jumpBtn.LayoutOrder = 5
+jumpBtn.Parent = mainFrame
+
+local bottomSpacer = Instance.new("Frame")
+bottomSpacer.Size = UDim2.new(1, 0, 0, 10)
+bottomSpacer.BackgroundTransparency = 1
+bottomSpacer.LayoutOrder = 6
+bottomSpacer.Parent = mainFrame
+
+local bottomLabel = createLabel("Join discord.gg/sW4PSks7wR")
+bottomLabel.LayoutOrder = 7
+bottomLabel.Parent = mainFrame
+
+--// State Variables
+local aimbotOn = false
+local espOn = false
+local infJumpOn = false
+local holdingRightClick = false
+
+-- ESP Boxes dictionary
+local espBoxes = {}
+
+-- Clear ESP Boxes
+local function clearESP()
+	for _, box in pairs(espBoxes) do
+		if box and box.Parent then
+			box:Destroy()
+		end
+	end
+	espBoxes = {}
+end
+
+-- Create ESP Box (Drawing Square)
+local function createBox()
+	local box = Drawing.new("Square")
+	box.Visible = false
+	box.Thickness = 2
+	box.Filled = false
+	box.Transparency = 1
+	box.Size = Vector2.new(0, 0)
+	box.Position = Vector2.new(0, 0)
+	return box
+end
+
+-- ✅ Updated ESP function to draw full-body boxes
+local function updateESP()
+	if not espOn then
+		clearESP()
+		return
+	end
+
+	local cam = workspace.CurrentCamera
+	local updated = {}
+
+	for _, plr in pairs(Players:GetPlayers()) do
+		if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character:FindFirstChild("Head") and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.Health > 0 then
+			local root = plr.Character.HumanoidRootPart
+			local head = plr.Character.Head
+
+			local bodyHeight = 5
+			local bottomY = root.Position.Y - (bodyHeight / 2)
+			local topY = head.Position.Y + 0.5
+
+			local topWorld = Vector3.new(root.Position.X, topY, root.Position.Z)
+			local bottomWorld = Vector3.new(root.Position.X, bottomY, root.Position.Z)
+
+			local topScreen, onScreen1 = cam:WorldToViewportPoint(topWorld)
+			local bottomScreen, onScreen2 = cam:WorldToViewportPoint(bottomWorld)
+
+			if onScreen1 and onScreen2 then
+				local box = espBoxes[plr] or createBox()
+				espBoxes[plr] = box
+
+				local height = math.abs(topScreen.Y - bottomScreen.Y)
+				local width = height / 2
+				local topLeft = Vector2.new(bottomScreen.X - width / 2, topScreen.Y)
+
+				box.Size = Vector2.new(width, height)
+				box.Position = topLeft
+
+				if plr.Team == player.Team then
+					box.Color = Color3.fromRGB(0, 0, 255)
+				else
+					box.Color = Color3.fromRGB(255, 0, 0)
+				end
+
+				box.Visible = true
+				updated[plr] = true
+			else
+				if espBoxes[plr] then
+					espBoxes[plr].Visible = false
+				end
+			end
+		else
+			if espBoxes[plr] then
+				espBoxes[plr].Visible = false
+			end
+		end
+	end
+
+	for plr, box in pairs(espBoxes) do
+		if not updated[plr] then
+			box.Visible = false
+		end
+	end
+end
+
+-- Right Click Detection
+uis.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		holdingRightClick = true
+	end
+end)
+uis.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		holdingRightClick = false
+	end
+end)
+
+-- Right Alt Toggle GUI visibility
+uis.InputBegan:Connect(function(input, gameProcessed)
+	if not gameProcessed and input.KeyCode == Enum.KeyCode.RightAlt then
+		gui.Enabled = not gui.Enabled
+	end
+end)
+
+-- Aimbot Target Function
+local function getClosestPlayer()
+	local maxDist, closest = math.huge, nil
+	for _, plr in pairs(Players:GetPlayers()) do
+		if plr ~= player and plr.Team ~= player.Team and plr.Character and plr.Character:FindFirstChild("Head") then
+			local pos, visible = cam:WorldToViewportPoint(plr.Character.Head.Position)
+			if visible then
+				local dist = (Vector2.new(pos.X, pos.Y) - Vector2.new(mouse.X, mouse.Y)).Magnitude
+				if dist < maxDist then
+					maxDist = dist
+					closest = plr
+				end
+			end
+		end
+	end
+	return closest
+end
+
+-- Recoil Removal (auto, always running)
+local function disableRecoil()
+	local char = player.Character
+	if not char then return end
+	for _, tool in pairs(char:GetChildren()) do
+		if tool:IsA("Tool") then
+			for _, obj in pairs(tool:GetDescendants()) do
+				if obj:IsA("Script") or obj:IsA("LocalScript") then
+					if obj.Name:lower():find("recoil") or (obj.Source and obj.Source:lower():find("punch")) then
+						obj.Disabled = true
+					end
+				elseif obj:IsA("NumberValue") and obj.Name:lower():find("recoil") then
+					obj.Value = 0
+				elseif obj:IsA("Vector3Value") and obj.Name:lower():find("kick") then
+					obj.Value = Vector3.new()
+				end
+			end
+		end
+	end
+end
+
+-- FOV Circle
+local Drawing = Drawing
+local fovCircle = Drawing.new("Circle")
+fovCircle.Radius = 80
+fovCircle.Position = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
+fovCircle.Color = Color3.fromRGB(255, 0, 0)
+fovCircle.Thickness = 2
+fovCircle.NumSides = 64
+fovCircle.Filled = false
+fovCircle.Visible = true
+
+-- Button toggles and coloring
+local function updateButton(btn, state, onColor)
+	btn.Text = btn.Name .. " [" .. (state and "ON" or "OFF") .. "]"
+	btn.BackgroundColor3 = state and onColor or Color3.fromRGB(60, 60, 60)
+end
+
+aimbotBtn.MouseButton1Click:Connect(function()
+	aimbotOn = not aimbotOn
+	updateButton(aimbotBtn, aimbotOn, Color3.fromRGB(70, 130, 255))
+end)
+
+espBtn.MouseButton1Click:Connect(function()
+	espOn = not espOn
+	updateButton(espBtn, espOn, Color3.fromRGB(255, 70, 70))
+	if not espOn then
+		clearESP()
+	end
+end)
+
+jumpBtn.MouseButton1Click:Connect(function()
+	infJumpOn = not infJumpOn
+	updateButton(jumpBtn, infJumpOn, Color3.fromRGB(100, 255, 100))
+end)
+
+-- Main Update Loop
+rs.RenderStepped:Connect(function()
+	fovCircle.Position = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
+
+	if aimbotOn and holdingRightClick then
+		local target = getClosestPlayer()
+		if target and target.Character and target.Character:FindFirstChild("Head") then
+			local headPos = target.Character.Head.Position
+			cam.CFrame = CFrame.new(cam.CFrame.Position, headPos)
+		end
+	end
+
+	disableRecoil()
+	updateESP()
+end)
+
+-- Inf Jump
+uis.JumpRequest:Connect(function()
+	if infJumpOn then
+		player.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+	end
+end)
+
+print("Rivals Script GUI loaded!")

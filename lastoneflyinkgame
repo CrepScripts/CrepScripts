@@ -1,0 +1,420 @@
+-- LocalScript: Ink Game Fly By Crepscripts (Safe Fly + Body Highlight ESP + Noclip Fix + Discord Button + WalkSpeed Slider Box + Fixed Toggle)
+-- Place in StarterPlayer > StarterPlayerScripts
+
+-- CONFIG
+local FLY_SPEED = 80
+local BODY_FORCE_MULT = 20000
+local ESP_DISTANCE = 1000
+local WALK_SPEED_MIN = 0
+local WALK_SPEED_MAX = 80
+local DEFAULT_WALKSPEED = 16
+
+-- SERVICES
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
+
+local localPlayer = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+-- STATE
+local enabledFly = false
+local enabledNoClip = false
+local enabledESP = false
+local enabledWalkSpeed = false
+local walkSpeedValue = DEFAULT_WALKSPEED
+local keysDown = {}
+
+-- REFERENCES
+local character, humanoid, hrp
+local bodyVelocity, bodyGyro
+local espHighlights = {}
+
+-- THEME COLORS
+local themeMain = Color3.fromRGB(40, 60, 90)
+local themeButtonOff = Color3.fromRGB(50, 70, 110)
+local themeButtonOn = Color3.fromRGB(80, 110, 160)
+local themeOutline = Color3.fromRGB(10, 20, 35)
+
+-- REFRESH CHARACTER
+local function refreshCharacter()
+	character = localPlayer.Character
+	if not character then return end
+	humanoid = character:FindFirstChildOfClass("Humanoid")
+	hrp = character:FindFirstChild("HumanoidRootPart")
+end
+
+-- FLY FUNCTIONS
+local function createFly()
+	if not hrp then return end
+	bodyVelocity = Instance.new("BodyVelocity")
+	bodyVelocity.MaxForce = Vector3.new(BODY_FORCE_MULT, BODY_FORCE_MULT, BODY_FORCE_MULT)
+	bodyVelocity.Velocity = Vector3.new(0,0,0)
+	bodyVelocity.Parent = hrp
+
+	bodyGyro = Instance.new("BodyGyro")
+	bodyGyro.MaxTorque = Vector3.new(BODY_FORCE_MULT, BODY_FORCE_MULT, BODY_FORCE_MULT)
+	bodyGyro.CFrame = hrp.CFrame
+	bodyGyro.Parent = hrp
+end
+
+local function destroyFly()
+	if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
+	if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
+end
+
+-- NOCLIP
+local function setNoClip(state)
+	if not character then return end
+	for _, part in ipairs(character:GetDescendants()) do
+		if part:IsA("BasePart") then
+			part.CanCollide = not state
+		end
+	end
+end
+
+-- ESP HIGHLIGHT
+local function createHighlightForPlayer(player)
+	if player == localPlayer then return end
+	if espHighlights[player] then return end
+	if not player.Character then return end
+
+	local highlight = Instance.new("Highlight")
+	highlight.FillTransparency = 0.5
+	highlight.OutlineTransparency = 0
+	highlight.Parent = player.Character
+
+	if player.Team and localPlayer.Team and player.Team == localPlayer.Team then
+		highlight.FillColor = Color3.fromRGB(100,170,255)
+	else
+		highlight.FillColor = Color3.fromRGB(255,100,100)
+	end
+
+	espHighlights[player] = highlight
+end
+
+local function removeHighlightForPlayer(player)
+	if espHighlights[player] then
+		espHighlights[player]:Destroy()
+		espHighlights[player] = nil
+	end
+end
+
+local function updateHighlightColors()
+	for player, highlight in pairs(espHighlights) do
+		if player.Team and localPlayer.Team and player.Team == localPlayer.Team then
+			highlight.FillColor = Color3.fromRGB(100,170,255)
+		else
+			highlight.FillColor = Color3.fromRGB(255,100,100)
+		end
+	end
+end
+
+-- GUI CREATION
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "InkGameFlyUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = localPlayer:WaitForChild("PlayerGui")
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 340, 0, 300)
+mainFrame.Position = UDim2.new(0.5, -170, 0.2, 0)
+mainFrame.AnchorPoint = Vector2.new(0.5, 0)
+mainFrame.BackgroundColor3 = themeMain
+mainFrame.Active = true
+mainFrame.Parent = ScreenGui
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
+
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Thickness = 3
+mainStroke.Color = themeOutline
+mainStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+mainStroke.Parent = mainFrame
+
+-- TITLE
+local titleBar = Instance.new("TextLabel", mainFrame)
+titleBar.Size = UDim2.new(1, 0, 0, 36)
+titleBar.BackgroundTransparency = 1
+titleBar.Font = Enum.Font.GothamBold
+titleBar.TextSize = 16
+titleBar.TextColor3 = Color3.fromRGB(255,255,255)
+titleBar.Text = "Ink Game Fly  |  By Crepscripts"
+
+-- HINT
+local hintLabel = Instance.new("TextLabel", mainFrame)
+hintLabel.Size = UDim2.new(1, -20, 0, 20)
+hintLabel.Position = UDim2.new(0, 10, 0, 36)
+hintLabel.BackgroundTransparency = 1
+hintLabel.Font = Enum.Font.Gotham
+hintLabel.TextSize = 12
+hintLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+hintLabel.Text = "Press Right Alt to hide/show the UI"
+
+-- DRAGGING FIX
+local dragging = false
+local dragInput, dragStart, startPos
+local function updateDrag(input)
+	local delta = input.Position - dragStart
+	mainFrame.Position = UDim2.new(
+		startPos.X.Scale, startPos.X.Offset + delta.X,
+		startPos.Y.Scale, startPos.Y.Offset + delta.Y
+	)
+end
+titleBar.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		dragStart = input.Position
+		startPos = mainFrame.Position
+
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+titleBar.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement then
+		dragInput = input
+	end
+end)
+UserInputService.InputChanged:Connect(function(input)
+	if input == dragInput and dragging then
+		updateDrag(input)
+	end
+end)
+
+-- BUTTON CREATOR
+local function makeButton(name, posY, callback)
+	local btn = Instance.new("TextButton", mainFrame)
+	btn.Size = UDim2.new(1, -20, 0, 28)
+	btn.Position = UDim2.new(0, 10, 0, posY)
+	btn.BackgroundColor3 = themeButtonOff
+	btn.TextColor3 = Color3.fromRGB(255,255,255)
+	btn.Font = Enum.Font.GothamSemibold
+	btn.TextSize = 14
+	btn.Text = name .. ": OFF"
+	btn.AutoButtonColor = false
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 2.5
+	stroke.Color = themeOutline
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Parent = btn
+
+	btn.MouseButton1Click:Connect(function()
+		local state = callback()
+		btn.Text = name .. ": " .. (state and "ON" or "OFF")
+		btn.BackgroundColor3 = state and themeButtonOn or themeButtonOff
+	end)
+
+	return btn
+end
+
+-- BUTTONS
+makeButton("Fly", 60, function()
+	enabledFly = not enabledFly
+	refreshCharacter()
+	if enabledFly then createFly() else destroyFly() end
+	return enabledFly
+end)
+
+makeButton("ESP", 100, function()
+	enabledESP = not enabledESP
+	if enabledESP then
+		for _, p in ipairs(Players:GetPlayers()) do createHighlightForPlayer(p) end
+	else
+		for p,_ in pairs(espHighlights) do removeHighlightForPlayer(p) end
+	end
+	return enabledESP
+end)
+
+makeButton("Noclip", 140, function()
+	enabledNoClip = not enabledNoClip
+	setNoClip(enabledNoClip)
+	return enabledNoClip
+end)
+
+-- WALKSPEED TOGGLE (moved above slider)
+local walkToggleBtn = makeButton("WalkSpeed", 180, function()
+	enabledWalkSpeed = not enabledWalkSpeed
+	if enabledWalkSpeed then
+		if humanoid then humanoid.WalkSpeed = walkSpeedValue end
+	else
+		if humanoid then humanoid.WalkSpeed = DEFAULT_WALKSPEED end
+	end
+	return enabledWalkSpeed
+end)
+
+-- WALKSPEED SLIDER (now below the toggle)
+local sliderButton = Instance.new("TextButton", mainFrame)
+sliderButton.Size = UDim2.new(1, -20, 0, 28)
+sliderButton.Position = UDim2.new(0, 10, 0, 220)
+sliderButton.BackgroundColor3 = themeButtonOff
+sliderButton.AutoButtonColor = false
+sliderButton.Text = ""
+sliderButton.Font = Enum.Font.GothamSemibold
+Instance.new("UICorner", sliderButton).CornerRadius = UDim.new(0, 8)
+local sliderStroke = Instance.new("UIStroke")
+sliderStroke.Thickness = 2.5
+sliderStroke.Color = themeOutline
+sliderStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+sliderStroke.Parent = sliderButton
+
+local sliderLabel = Instance.new("TextLabel", sliderButton)
+sliderLabel.Size = UDim2.new(0.42, 0, 1, 0)
+sliderLabel.Position = UDim2.new(0, 10, 0, 0)
+sliderLabel.BackgroundTransparency = 1
+sliderLabel.Font = Enum.Font.Gotham
+sliderLabel.TextSize = 14
+sliderLabel.TextColor3 = Color3.fromRGB(255,255,255)
+sliderLabel.TextXAlignment = Enum.TextXAlignment.Left
+sliderLabel.Text = "WalkSpeed: " .. walkSpeedValue
+
+local dragOuter = Instance.new("Frame", sliderButton)
+dragOuter.Size = UDim2.new(0.55, -20, 0.7, 0)
+dragOuter.Position = UDim2.new(0.45, 10, 0.15, 0)
+dragOuter.BackgroundColor3 = Color3.fromRGB(30,45,70)
+Instance.new("UICorner", dragOuter).CornerRadius = UDim.new(0, 6)
+
+local dragFill = Instance.new("Frame", dragOuter)
+local initialRatio = math.clamp((walkSpeedValue - WALK_SPEED_MIN) / (WALK_SPEED_MAX - WALK_SPEED_MIN), 0, 1)
+dragFill.Size = UDim2.new(initialRatio, 0, 1, 0)
+dragFill.Position = UDim2.new(0, 0, 0, 0)
+Instance.new("UICorner", dragFill).CornerRadius = UDim.new(0, 6)
+dragFill.BackgroundColor3 = themeButtonOn
+
+local handle = Instance.new("Frame", dragOuter)
+handle.Size = UDim2.new(0, 10, 0.9, 0)
+handle.AnchorPoint = Vector2.new(0.5, 0.5)
+handle.Position = UDim2.new(initialRatio, 0, 0.5, 0)
+handle.BackgroundColor3 = Color3.fromRGB(200,200,200)
+Instance.new("UICorner", handle).CornerRadius = UDim.new(0, 4)
+handle.BackgroundTransparency = 0.25
+
+local draggingSlider = false
+dragOuter.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		draggingSlider = true
+		local relPos = math.clamp((input.Position.X - dragOuter.AbsolutePosition.X) / dragOuter.AbsoluteSize.X, 0, 1)
+		walkSpeedValue = math.floor(WALK_SPEED_MIN + relPos * (WALK_SPEED_MAX - WALK_SPEED_MIN) + 0.5)
+		dragFill.Size = UDim2.new(relPos, 0, 1, 0)
+		handle.Position = UDim2.new(relPos, 0, 0.5, 0)
+		sliderLabel.Text = "WalkSpeed: " .. walkSpeedValue
+		if enabledWalkSpeed and humanoid then humanoid.WalkSpeed = walkSpeedValue end
+	end
+end)
+dragOuter.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		draggingSlider = false
+	end
+end)
+UserInputService.InputChanged:Connect(function(input)
+	if draggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
+		local relPos = math.clamp((input.Position.X - dragOuter.AbsolutePosition.X) / dragOuter.AbsoluteSize.X, 0, 1)
+		walkSpeedValue = math.floor(WALK_SPEED_MIN + relPos * (WALK_SPEED_MAX - WALK_SPEED_MIN) + 0.5)
+		dragFill.Size = UDim2.new(relPos, 0, 1, 0)
+		handle.Position = UDim2.new(relPos, 0, 0.5, 0)
+		sliderLabel.Text = "WalkSpeed: " .. walkSpeedValue
+		if enabledWalkSpeed and humanoid then humanoid.WalkSpeed = walkSpeedValue end
+	end
+end)
+
+-- DISCORD BUTTON
+local discordBtn = Instance.new("TextButton", mainFrame)
+discordBtn.Size = UDim2.new(1, -20, 0, 28)
+discordBtn.Position = UDim2.new(0, 10, 0, 260)
+discordBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+discordBtn.TextColor3 = Color3.fromRGB(255,255,255)
+discordBtn.Font = Enum.Font.GothamBold
+discordBtn.TextSize = 14
+discordBtn.Text = "Join Discord"
+discordBtn.AutoButtonColor = true
+Instance.new("UICorner", discordBtn).CornerRadius = UDim.new(0, 8)
+local discordStroke = Instance.new("UIStroke")
+discordStroke.Thickness = 2.5
+discordStroke.Color = themeOutline
+discordStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+discordStroke.Parent = discordBtn
+discordBtn.MouseButton1Click:Connect(function()
+	StarterGui:SetCore("SendNotification", {
+		Title = "Discord",
+		Text = "Opening invite link...",
+		Duration = 3
+	})
+	setclipboard("https://discord.com/invite/sW4PSks7wR")
+end)
+
+-- HIDE GUI WITH RIGHT ALT
+UserInputService.InputBegan:Connect(function(input, gp)
+	if not gp and input.KeyCode == Enum.KeyCode.RightAlt then
+		mainFrame.Visible = not mainFrame.Visible
+	end
+end)
+
+-- MOVEMENT KEYS
+local moveKeys = {
+	[Enum.KeyCode.W] = Vector3.new(0,0,-1),
+	[Enum.KeyCode.S] = Vector3.new(0,0,1),
+	[Enum.KeyCode.A] = Vector3.new(-1,0,0),
+	[Enum.KeyCode.D] = Vector3.new(1,0,0),
+	[Enum.KeyCode.Space] = Vector3.new(0,1,0),
+	[Enum.KeyCode.LeftControl] = Vector3.new(0,-1,0)
+}
+
+UserInputService.InputBegan:Connect(function(input, gp)
+	if gp then return end
+	if moveKeys[input.KeyCode] then keysDown[input.KeyCode] = true end
+end)
+UserInputService.InputEnded:Connect(function(input, gp)
+	if gp then return end
+	if moveKeys[input.KeyCode] then keysDown[input.KeyCode] = nil end
+end)
+
+-- UPDATE LOOP
+RunService.RenderStepped:Connect(function()
+	refreshCharacter()
+
+	if enabledFly and hrp and bodyVelocity and bodyGyro then
+		local camCF = camera.CFrame
+		local moveDir = Vector3.new(0,0,0)
+
+		for key,_ in pairs(keysDown) do
+			local dir = moveKeys[key]
+			if dir.Y ~= 0 then
+				moveDir = moveDir + Vector3.new(0, dir.Y, 0)
+			else
+				moveDir = moveDir + ((camCF.RightVector * dir.X) - (camCF.LookVector * dir.Z))
+			end
+		end
+
+		if moveDir.Magnitude > 0 then moveDir = moveDir.Unit end
+		bodyVelocity.Velocity = moveDir * FLY_SPEED
+		bodyGyro.CFrame = CFrame.new(hrp.Position, hrp.Position + Vector3.new(camCF.LookVector.X, 0, camCF.LookVector.Z))
+	end
+
+	if enabledNoClip then setNoClip(true) end
+	if enabledESP then updateHighlightColors() end
+	if enabledWalkSpeed and humanoid then
+		humanoid.WalkSpeed = walkSpeedValue
+	end
+end)
+
+-- PLAYER HOOKS
+Players.PlayerAdded:Connect(function(player)
+	player.CharacterAdded:Connect(function()
+		if enabledESP then createHighlightForPlayer(player) end
+	end)
+end)
+Players.PlayerRemoving:Connect(function(player)
+	removeHighlightForPlayer(player)
+end)
+localPlayer.CharacterAdded:Connect(function()
+	wait(0.2)
+	refreshCharacter()
+	if enabledFly then createFly() end
+	if enabledNoClip then setNoClip(true) end
+	if enabledWalkSpeed and humanoid then humanoid.WalkSpeed = walkSpeedValue end
+end)
